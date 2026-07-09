@@ -1,4 +1,7 @@
-import type { APIRoute } from "astro";
+import { env } from "cloudflare:workers";
+
 import { api } from "../../lib/server";
-export const ALL: APIRoute = ({ request, locals, params }) =>
-  api(request, (locals as any).runtime.env, params.path || "");
+
+import type { APIRoute } from "astro";
+
+export const ALL: APIRoute = ({ request, params }) => api(request, env as Env, params.path || "");
