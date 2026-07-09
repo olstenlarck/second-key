@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro check && astro build",
+    "deploy": "astro build && wrangler deploy --config dist/server/wrangler.json",
     "preview": "astro preview",
     "check": "astro check",
     "lint": "vp check",
