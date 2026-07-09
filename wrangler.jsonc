@@ -1,0 +1,7 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "second-key-totp",
+  "compatibility_date": "2026-07-09",
+  "kv_namespaces": [{ "binding": "TOTP_KV", "id": "c31d8f9f86fc40a2b6d19c762700df67" }],
+  "routes": [{ "pattern": "totp.wgw.lol/*", "zone_name": "wgw.lol" }],
+}
