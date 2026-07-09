@@ -73,8 +73,14 @@ export default defineConfig({
         input: ["**/*.ts", "!**/dist/**/*", "!**/node_modules/**/*"],
       },
       build: {
-        command: "vp run -r build",
-        input: ["packages/*/{src,test}/**/*.ts", "!**/dist/**/*", "!**/node_modules/**/*"],
+        command: "astro build",
+        input: [
+          "src/**/*.ts",
+          "src/**/*.astro",
+          "packages/*/{src,test}/**/*.ts",
+          "!**/dist/**/*",
+          "!**/node_modules/**/*",
+        ],
       },
       test: {
         command: "vp test",
