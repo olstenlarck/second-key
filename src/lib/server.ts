@@ -1,185 +1,364 @@
-const ORIGIN = "https://totp.wgw.lol",
-  SHOO = "https://shoo.dev",
-  te = new TextEncoder(),
-  td = new TextDecoder();
-const b64 = (b: Uint8Array) =>
-  btoa(String.fromCharCode(...b))
+const ORIGIN = "https://totp.wgw.lol";
+const SHOO = "https://shoo.dev";
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+
+export type TotpItem = {
+  id: string;
+  label: string;
+  issuer: string;
+  secret: string;
+  algorithm: "SHA1" | "SHA256" | "SHA512";
+  digits: 6 | 8;
+  period: 30 | 60;
+};
+
+export type SessionUser = {
+  sub: string;
+  name: string;
+  exp: number;
+};
+
+type TokenMetadata = {
+  sealed: string;
+};
+
+let jwks: { exp: number; keys: Array<JsonWebKey & { kid?: string }> } | undefined;
+
+function encodeBase64(bytes: Uint8Array): string {
+  return btoa(String.fromCharCode(...bytes))
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "");
-const unb64 = (s: string) =>
-  Uint8Array.from(
-    atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)),
-    (c) => c.charCodeAt(0),
-  );
-const cookie = (r: Request, n: string) =>
-  Object.fromEntries(
-    (r.headers.get("cookie") || "")
+}
+
+function decodeBase64(value: string): Uint8Array<ArrayBuffer> {
+  const padded = value.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((value.length + 3) % 4);
+
+  const decoded = atob(padded);
+  const bytes = new Uint8Array(decoded.length);
+  for (let index = 0; index < decoded.length; index += 1) {
+    bytes[index] = decoded.charCodeAt(index);
+  }
+
+  return bytes;
+}
+
+function readCookie(request: Request, name: string): string | undefined {
+  const cookies = Object.fromEntries(
+    (request.headers.get("cookie") ?? "")
       .split(/; */)
       .filter(Boolean)
-      .map((x) => {
-        const i = x.indexOf("=");
-        return [x.slice(0, i), x.slice(i + 1)];
+      .map((entry) => {
+        const separator = entry.indexOf("=");
+
+        return [entry.slice(0, separator), entry.slice(separator + 1)];
       }),
-  )[n];
-async function key(env: Env, type: "aes" | "hmac") {
+  );
+
+  return cookies[name];
+}
+
+async function cryptoKey(env: Env, type: "aes" | "hmac"): Promise<CryptoKey> {
   return crypto.subtle.importKey(
     "raw",
-    unb64(env.MASTER_KEY),
+    decodeBase64(env.MASTER_KEY),
     type === "aes" ? "AES-GCM" : { name: "HMAC", hash: "SHA-256" },
     false,
     type === "aes" ? ["encrypt", "decrypt"] : ["sign"],
   );
 }
-async function seal(v: string, e: Env) {
-  const iv = crypto.getRandomValues(new Uint8Array(12)),
-    out = new Uint8Array(
-      await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await key(e, "aes"), te.encode(v)),
-    );
-  return b64(iv) + "." + b64(out);
-}
-async function open(v: string, e: Env) {
-  const [a, b] = v.split(".");
-  return td.decode(
-    await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(a) }, await key(e, "aes"), unb64(b)),
-  );
-}
-async function session(sub: string, name: string, e: Env) {
-  const p = b64(
-      te.encode(JSON.stringify({ sub, name: name || "Signed-in user", exp: Date.now() + 864e5 })),
+
+async function seal(value: unknown, env: Env): Promise<string> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = new Uint8Array(
+    await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv },
+      await cryptoKey(env, "aes"),
+      encoder.encode(JSON.stringify(value)),
     ),
-    s = new Uint8Array(await crypto.subtle.sign("HMAC", await key(e, "hmac"), te.encode(p)));
-  return p + "." + b64(s);
+  );
+
+  return `${encodeBase64(iv)}.${encodeBase64(ciphertext)}`;
 }
-async function user(r: Request, e: Env) {
+
+async function unseal<T>(value: string, env: Env): Promise<T> {
+  const [iv, ciphertext] = value.split(".");
+  const plaintext = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: decodeBase64(iv) },
+    await cryptoKey(env, "aes"),
+    decodeBase64(ciphertext),
+  );
+
+  const decoded = decoder.decode(plaintext);
+
   try {
-    const [p, s] = cookie(r, "totp_session").split("."),
-      ok = await crypto.subtle.verify("HMAC", await key(e, "hmac"), unb64(s), te.encode(p)),
-      d = JSON.parse(td.decode(unb64(p)));
-    return ok && d.exp > Date.now() ? d : null;
+    return JSON.parse(decoded) as T;
+  } catch {
+    return decoded as T;
+  }
+}
+
+async function createSession(sub: string, name: string, env: Env): Promise<string> {
+  const payload = encodeBase64(
+    encoder.encode(
+      JSON.stringify({
+        sub,
+        name: name || "Signed-in user",
+        exp: Date.now() + 86_400_000,
+      }),
+    ),
+  );
+  const signature = new Uint8Array(
+    await crypto.subtle.sign("HMAC", await cryptoKey(env, "hmac"), encoder.encode(payload)),
+  );
+
+  return `${payload}.${encodeBase64(signature)}`;
+}
+
+export async function getUser(request: Request, env: Env): Promise<SessionUser | null> {
+  try {
+    const [payload, signature] = readCookie(request, "totp_session")!.split(".");
+    const valid = await crypto.subtle.verify(
+      "HMAC",
+      await cryptoKey(env, "hmac"),
+      decodeBase64(signature),
+      encoder.encode(payload),
+    );
+    const user = JSON.parse(decoder.decode(decodeBase64(payload))) as SessionUser;
+
+    return valid && user.exp > Date.now() ? user : null;
   } catch {
     return null;
   }
 }
-let cache: any;
-async function verify(token: string) {
-  const p = token.split("."),
-    h = JSON.parse(td.decode(unb64(p[0]))),
-    d = JSON.parse(td.decode(unb64(p[1])));
+
+async function verifyShooToken(token: string): Promise<Record<string, string | number>> {
+  const parts = token.split(".");
+  const header = JSON.parse(decoder.decode(decodeBase64(parts[0])));
+  const payload = JSON.parse(decoder.decode(decodeBase64(parts[1])));
+
   if (
-    p.length !== 3 ||
-    h.alg !== "ES256" ||
-    d.iss !== SHOO ||
-    d.aud !== `origin:${ORIGIN}` ||
-    d.exp * 1000 < Date.now()
-  )
-    throw 0;
-  if (!cache || cache.exp < Date.now()) {
-    cache = {
-      ...((await (await fetch(SHOO + "/.well-known/jwks.json")).json()) as any),
-      exp: Date.now() + 36e5,
-    };
+    parts.length !== 3 ||
+    header.alg !== "ES256" ||
+    payload.iss !== SHOO ||
+    payload.aud !== `origin:${ORIGIN}` ||
+    payload.exp * 1000 < Date.now()
+  ) {
+    throw new Error("Invalid identity token");
   }
-  const jwk = cache.keys.find((x: any) => x.kid === h.kid),
-    k = await crypto.subtle.importKey("jwk", jwk, { name: "ECDSA", namedCurve: "P-256" }, false, [
-      "verify",
-    ]);
-  if (
-    !(await crypto.subtle.verify(
-      { name: "ECDSA", hash: "SHA-256" },
-      k,
-      unb64(p[2]),
-      te.encode(p[0] + "." + p[1]),
-    ))
-  )
-    throw 0;
-  return d;
+
+  if (!jwks || jwks.exp < Date.now()) {
+    const response = await fetch(`${SHOO}/.well-known/jwks.json`);
+    const keys = (await response.json()) as { keys: Array<JsonWebKey & { kid?: string }> };
+    jwks = { ...keys, exp: Date.now() + 3_600_000 };
+  }
+
+  const keyData = jwks.keys.find((key) => key.kid === header.kid);
+  if (!keyData) throw new Error("Unknown identity key");
+
+  const key = await crypto.subtle.importKey(
+    "jwk",
+    keyData,
+    { name: "ECDSA", namedCurve: "P-256" },
+    false,
+    ["verify"],
+  );
+  const valid = await crypto.subtle.verify(
+    { name: "ECDSA", hash: "SHA-256" },
+    key,
+    decodeBase64(parts[2]),
+    encoder.encode(`${parts[0]}.${parts[1]}`),
+  );
+
+  if (!valid) throw new Error("Invalid identity signature");
+
+  return payload;
 }
-const norm = (x: any) => ({
-  id: x.id || crypto.randomUUID(),
-  label: String(x.label || "").slice(0, 80),
-  issuer: String(x.issuer || "").slice(0, 80),
-  secret: String(x.secret || "")
-    .replace(/[\s=-]/g, "")
-    .toUpperCase(),
-  algorithm: ["SHA1", "SHA256", "SHA512"].includes(x.algorithm) ? x.algorithm : "SHA256",
-  digits: [6, 8].includes(+x.digits) ? +x.digits : 6,
-  period: [30, 60].includes(+x.period) ? +x.period : 30,
-});
-async function rows(sub: string, e: Env) {
-  const a: any[] = (await e.TOTP_KV.get("u:" + sub, "json")) || [];
-  return Promise.all(a.map(async (x) => ({ ...x, secret: await open(x.secret, e) })));
+
+function normalize(input: Partial<TotpItem>): TotpItem {
+  return {
+    id: input.id || crypto.randomUUID(),
+    label: String(input.label || "").slice(0, 80),
+    issuer: String(input.issuer || "").slice(0, 80),
+    secret: String(input.secret || "")
+      .replace(/[\s=-]/g, "")
+      .toUpperCase(),
+    algorithm: ["SHA1", "SHA256", "SHA512"].includes(String(input.algorithm))
+      ? input.algorithm!
+      : "SHA256",
+    digits: [6, 8].includes(Number(input.digits)) ? input.digits! : 6,
+    period: [30, 60].includes(Number(input.period)) ? input.period! : 30,
+  };
 }
-async function save(sub: string, a: any[], e: Env) {
-  await e.TOTP_KV.put(
-    "u:" + sub,
-    JSON.stringify(
-      await Promise.all(a.map(async (x) => ({ ...x, secret: await seal(x.secret, e) }))),
-    ),
+
+function validItem(item: TotpItem): boolean {
+  return Boolean(item.label) && /^[A-Z2-7]{16,256}$/.test(item.secret);
+}
+
+function tokenPrefix(sub: string): string {
+  return `u:${sub}:`;
+}
+
+function slugify(label: string): string {
+  return (
+    label
+      .normalize("NFKD")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 56) || "token"
   );
 }
-export async function api(r: Request, e: Env, path: string) {
-  const j = (x: any, s = 200, h = {}) =>
-    new Response(JSON.stringify(x), {
-      status: s,
-      headers: { "content-type": "application/json", "cache-control": "no-store", ...h },
+
+function tokenKey(sub: string, item: TotpItem): string {
+  return `${tokenPrefix(sub)}${slugify(item.label)}-${item.id.slice(0, 8)}`;
+}
+
+async function listStoredItems(
+  sub: string,
+  env: Env,
+): Promise<Array<{ key: string; item: TotpItem }>> {
+  const records: Array<{ key: string; item: TotpItem }> = [];
+  let cursor: string | undefined;
+
+  do {
+    const page = await env.TOTP_KV.list<TokenMetadata>({
+      prefix: tokenPrefix(sub),
+      cursor,
+      limit: 1_000,
     });
-  if (path === "session" && r.method === "POST")
+
+    for (const key of page.keys) {
+      if (key.metadata?.sealed) {
+        records.push({
+          key: key.name,
+          item: await unseal<TotpItem>(key.metadata.sealed, env),
+        });
+      }
+    }
+
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
+
+  return records;
+}
+
+async function putItem(sub: string, item: TotpItem, env: Env): Promise<void> {
+  await env.TOTP_KV.put(tokenKey(sub, item), "", {
+    metadata: { sealed: await seal(item, env) } satisfies TokenMetadata,
+  });
+}
+
+async function migrateLegacyItems(sub: string, env: Env): Promise<void> {
+  const legacyKey = `u:${sub}`;
+  const legacyItems = await env.TOTP_KV.get<Array<TotpItem & { secret: string }>>(
+    legacyKey,
+    "json",
+  );
+  if (!legacyItems?.length) return;
+
+  for (const legacyItem of legacyItems) {
+    const item = normalize({
+      ...legacyItem,
+      secret: await unseal<string>(legacyItem.secret, env),
+    });
+    await putItem(sub, item, env);
+  }
+
+  await env.TOTP_KV.delete(legacyKey);
+}
+
+export async function getItems(sub: string, env: Env): Promise<TotpItem[]> {
+  let records = await listStoredItems(sub, env);
+  if (records.length === 0) {
+    await migrateLegacyItems(sub, env);
+    records = await listStoredItems(sub, env);
+  }
+
+  return records
+    .map(({ item }) => item)
+    .sort((left, right) => left.label.localeCompare(right.label));
+}
+
+async function response(body: unknown, status = 200, headers: HeadersInit = {}): Promise<Response> {
+  const responseHeaders = new Headers(headers);
+  responseHeaders.set("cache-control", "no-store");
+  responseHeaders.set("content-type", "application/json");
+
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: responseHeaders,
+  });
+}
+
+export async function api(request: Request, env: Env, path: string): Promise<Response> {
+  if (path === "session" && request.method === "POST") {
     try {
-      const d = await verify(((await r.json()) as any).idToken),
-        s = await session(d.pairwise_sub, d.name, e);
-      return j({ ok: true }, 200, {
-        "set-cookie": `totp_session=${s}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=86400`,
+      const { idToken } = (await request.json()) as { idToken: string };
+      const identity = await verifyShooToken(idToken);
+      const session = await createSession(
+        String(identity.pairwise_sub),
+        String(identity.name || ""),
+        env,
+      );
+
+      return response({ ok: true }, 200, {
+        "set-cookie": `totp_session=${session}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=86400`,
       });
     } catch {
-      return j({ error: "Sign-in could not be verified" }, 401);
+      return response({ error: "Sign-in could not be verified" }, 401);
     }
-  if (path === "logout" && r.method === "POST")
-    return j({ ok: true }, 200, {
+  }
+
+  if (path === "logout" && request.method === "POST") {
+    return response({ ok: true }, 200, {
       "set-cookie": "totp_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax",
     });
-  const u = await user(r, e);
-  if (!u) return j({ error: "Authentication required" }, 401);
-  if (path === "items" && r.method === "GET")
-    return j({ items: await rows(u.sub, e), name: u.name });
-  if (path === "items" && r.method === "POST") {
-    const x = norm(await r.json());
-    if (!x.label || !/^[A-Z2-7]{16,256}$/.test(x.secret)) return j({ error: "Invalid token" }, 400);
-    const a = await rows(u.sub, e);
-    a.push(x);
-    await save(u.sub, a, e);
-    return j({ item: x }, 201);
   }
 
-  if (path.startsWith("items/") && r.method === "PATCH") {
+  const user = await getUser(request, env);
+  if (!user) return response({ error: "Authentication required" }, 401);
+
+  if (path === "items" && request.method === "GET") {
+    return response({ items: await getItems(user.sub, env), name: user.name });
+  }
+
+  if (path === "items" && request.method === "POST") {
+    const item = normalize((await request.json()) as Partial<TotpItem>);
+    if (!validItem(item)) return response({ error: "Invalid token" }, 400);
+
+    await putItem(user.sub, item, env);
+
+    return response({ item }, 201);
+  }
+
+  if (path.startsWith("items/")) {
     const id = path.slice(6);
-    const body = (await r.json()) as Record<string, unknown>;
-    const next = norm({ ...body, id });
-    if (!next.label || !/^[A-Z2-7]{16,256}$/.test(next.secret)) {
-      return j({ error: "Invalid token" }, 400);
+    const records = await listStoredItems(user.sub, env);
+    const current = records.find(({ item }) => item.id === id);
+    if (!current) return response({ error: "Token not found" }, 404);
+
+    if (request.method === "PATCH") {
+      const item = normalize({
+        ...current.item,
+        ...((await request.json()) as Partial<TotpItem>),
+        id,
+      });
+      if (!validItem(item)) return response({ error: "Invalid token" }, 400);
+
+      await putItem(user.sub, item, env);
+      if (current.key !== tokenKey(user.sub, item)) await env.TOTP_KV.delete(current.key);
+
+      return response({ item });
     }
 
-    const current = await rows(u.sub, e);
-    if (!current.some((item) => item.id === id)) {
-      return j({ error: "Token not found" }, 404);
+    if (request.method === "DELETE") {
+      await env.TOTP_KV.delete(current.key);
+
+      return response({ ok: true });
     }
-
-    await save(
-      u.sub,
-      current.map((item) => (item.id === id ? next : item)),
-      e,
-    );
-
-    return j({ item: next });
   }
 
-  if (path.startsWith("items/") && r.method === "DELETE") {
-    await save(
-      u.sub,
-      (await rows(u.sub, e)).filter((x) => x.id !== path.slice(6)),
-      e,
-    );
-    return j({ ok: true });
-  }
-  return j({ error: "Not found" }, 404);
+  return response({ error: "Not found" }, 404);
 }
