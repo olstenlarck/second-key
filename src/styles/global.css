@@ -1,0 +1,30 @@
+@import "tailwindcss";
+@theme {
+  --color-ink: #090a09;
+  --color-paper: #f2f1ea;
+  --color-acid: #c9ff4d;
+  --color-line: #2b2e29;
+  --font-display: "Arial Black", "Helvetica Neue", sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", monospace;
+}
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    background: var(--color-ink);
+    color: var(--color-paper);
+    font-family: var(--font-mono);
+  }
+  button {
+    cursor: pointer;
+  }
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  a:focus-visible {
+    outline: 2px solid var(--color-acid);
+    outline-offset: 3px;
+  }
+}
