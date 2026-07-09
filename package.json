@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "deploy": "astro build && wrangler deploy --config dist/server/wrangler.json",
+    "deploy": "vp run build && wrangler deploy --config dist/server/wrangler.json",
     "dev": "astro dev",
     "preview": "astro preview"
   },
