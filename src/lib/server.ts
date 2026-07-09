@@ -102,7 +102,7 @@ const norm = (x: any) => ({
   secret: String(x.secret || "")
     .replace(/[\s=-]/g, "")
     .toUpperCase(),
-  algorithm: ["SHA1", "SHA256", "SHA512"].includes(x.algorithm) ? x.algorithm : "SHA1",
+  algorithm: ["SHA1", "SHA256", "SHA512"].includes(x.algorithm) ? x.algorithm : "SHA256",
   digits: [6, 8].includes(+x.digits) ? +x.digits : 6,
   period: [30, 60].includes(+x.period) ? +x.period : 30,
 });
@@ -150,6 +150,29 @@ export async function api(r: Request, e: Env, path: string) {
     await save(u.sub, a, e);
     return j({ item: x }, 201);
   }
+
+  if (path.startsWith("items/") && r.method === "PATCH") {
+    const id = path.slice(6);
+    const body = (await r.json()) as Record<string, unknown>;
+    const next = norm({ ...body, id });
+    if (!next.label || !/^[A-Z2-7]{16,256}$/.test(next.secret)) {
+      return j({ error: "Invalid token" }, 400);
+    }
+
+    const current = await rows(u.sub, e);
+    if (!current.some((item) => item.id === id)) {
+      return j({ error: "Token not found" }, 404);
+    }
+
+    await save(
+      u.sub,
+      current.map((item) => (item.id === id ? next : item)),
+      e,
+    );
+
+    return j({ item: next });
+  }
+
   if (path.startsWith("items/") && r.method === "DELETE") {
     await save(
       u.sub,
