@@ -1,5 +1,18 @@
 ---
+import { env } from "cloudflare:workers";
+
+import { getItems, getUser } from "../lib/server";
+
 import "../styles/global.css";
+
+const user = await getUser(Astro.request, env as Env);
+const items = user ? await getItems(user.sub, env as Env) : [];
+const initials = user?.name
+  .split(" ")
+  .slice(0, 2)
+  .map((part) => part[0])
+  .join("")
+  .toUpperCase();
 ---
 
 <!doctype html>
@@ -12,54 +25,215 @@ import "../styles/global.css";
     <title>Second Key</title>
     <script is:inline src="https://shoo.dev/shoo.js" defer></script>
   </head>
-  <body class="min-h-screen bg-ink text-paper">
+  <body class="min-h-screen bg-ink text-paper" data-authenticated={Boolean(user)}>
     <header class="sticky top-0 z-30 border-b border-line bg-ink/90 backdrop-blur-xl">
       <div class="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 lg:px-8">
         <a href="/" class="flex items-center gap-3 no-underline">
           <span class="grid size-10 place-items-center bg-acid font-display text-xl text-ink">Ⅱ</span>
           <span class="font-display text-lg tracking-tight">SECOND KEY</span>
         </a>
-        <div class="flex items-center gap-3">
-          <a id="identity" href="https://shoo.dev/me" target="_blank" rel="noopener" class="hidden items-center gap-3 border-r border-line pr-4 text-right no-underline">
-            <span><b id="name" class="block text-xs">User</b><small class="text-[9px] uppercase tracking-widest text-white/40">Manage profile ↗</small></span>
-            <span id="avatar" class="grid size-9 place-items-center border border-white/20 text-xs text-acid">SK</span>
-          </a>
-          <button id="logout" class="hidden bg-transparent px-2 py-2 text-xs text-white/50 hover:text-white">Sign out</button>
-        </div>
+
+        {
+          user && (
+            <div class="flex items-center gap-3">
+              <a
+                href="https://shoo.dev/me"
+                target="_blank"
+                rel="noopener"
+                class="flex items-center gap-3 border-r border-line pr-4 text-right no-underline"
+              >
+                <span>
+                  <b class="block text-xs">{user.name}</b>
+                  <small class="text-[9px] uppercase tracking-widest text-white/40">
+                    Manage profile ↗
+                  </small>
+                </span>
+                <span class="grid size-9 place-items-center border border-white/20 text-xs text-acid">
+                  {initials}
+                </span>
+              </a>
+              <button id="logout" class="bg-transparent px-2 py-2 text-xs text-white/50 hover:text-white">
+                Sign out
+              </button>
+            </div>
+          )
+        }
       </div>
     </header>
 
     <main class="mx-auto max-w-7xl px-5 py-10 lg:px-8 lg:py-16">
-      <section id="gate" class="grid min-h-[65vh] place-items-center">
-        <div class="w-full max-w-md border border-line bg-[#10120f] p-7 shadow-[10px_10px_0_#1d211a]">
-          <p class="mb-4 text-[10px] uppercase tracking-[.22em] text-acid">Private authenticator</p>
-          <h1 class="font-display text-4xl leading-[.95] tracking-[-.055em]">Codes without<br />the clutter.</h1>
-          <p class="mt-5 text-sm leading-6 text-white/50">Encrypted TOTP storage, protected by your Google identity.</p>
-          <p id="auth-error" class="mt-5 hidden border-l-2 border-red-400 bg-red-400/10 p-3 text-xs text-red-200"></p>
-          <button id="login" class="mt-8 w-full bg-acid px-5 py-4 font-bold text-ink transition hover:translate-x-1 hover:translate-y-1">Continue with Google →</button>
-        </div>
-      </section>
+      {
+        !user ? (
+          <section class="grid min-h-[65vh] place-items-center">
+            <div class="w-full max-w-md border border-line bg-[#10120f] p-7 shadow-[10px_10px_0_#1d211a]">
+              <p class="mb-4 text-[10px] uppercase tracking-[.22em] text-acid">
+                Private authenticator
+              </p>
+              <h1 class="font-display text-4xl leading-[.95] tracking-[-.055em]">
+                Codes without
+                <br />
+                the clutter.
+              </h1>
+              <p class="mt-5 text-sm leading-6 text-white/50">
+                Encrypted TOTP storage, protected by your Google identity.
+              </p>
+              <p
+                id="auth-error"
+                class="mt-5 hidden border-l-2 border-red-400 bg-red-400/10 p-3 text-xs text-red-200"
+              />
+              <button
+                id="login"
+                class="mt-8 w-full bg-acid px-5 py-4 font-bold text-ink transition hover:translate-x-1 hover:translate-y-1"
+              >
+                Continue with Google →
+              </button>
+            </div>
+          </section>
+        ) : (
+          <section>
+            <div class="mb-8 flex flex-wrap items-end justify-between gap-5">
+              <div>
+                <p class="text-[10px] uppercase tracking-[.22em] text-acid">
+                  Authenticator vault
+                </p>
+                <h1 class="mt-2 font-display text-5xl tracking-[-.06em]">Your codes</h1>
+              </div>
+              <div class="flex gap-2">
+                <button id="privacy" class="border border-line px-4 py-3 text-xs hover:border-acid">
+                  Show codes
+                </button>
+                <button id="add" class="bg-acid px-5 py-3 font-bold text-ink">Add token +</button>
+              </div>
+            </div>
 
-      <section id="app" class="hidden">
-        <div class="mb-8 flex flex-wrap items-end justify-between gap-5">
-          <div><p class="text-[10px] uppercase tracking-[.22em] text-acid">Authenticator vault</p><h1 class="mt-2 font-display text-5xl tracking-[-.06em]">Your codes</h1></div>
-          <div class="flex gap-2"><button id="privacy" class="border border-line px-4 py-3 text-xs hover:border-acid">Show codes</button><button id="add" class="bg-acid px-5 py-3 font-bold text-ink">Add token +</button></div>
-        </div>
-        <div id="list" class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"></div>
-      </section>
+            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {items.length === 0 && (
+                <div class="col-span-full border border-line py-24 text-center text-sm text-white/35">
+                  No codes yet.
+                </div>
+              )}
+              {items.map((item) => (
+                <article
+                  data-token-card
+                  data-item={JSON.stringify(item)}
+                  class="group min-w-0 border border-line bg-[#10120f] p-5 hover:border-white/30"
+                >
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                      <p class="truncate text-[10px] uppercase tracking-[.18em] text-white/35">
+                        {item.issuer || "TOTP"}
+                      </p>
+                      <h2 class="mt-2 truncate font-bold">{item.label}</h2>
+                    </div>
+                    <div class="flex gap-1">
+                      <button
+                        data-edit
+                        title="Edit"
+                        class="grid size-9 place-items-center border border-line text-white/45 hover:border-acid hover:text-acid"
+                      >
+                        ✎
+                      </button>
+                      <button
+                        data-delete
+                        title="Delete"
+                        class="grid size-9 place-items-center border border-line text-white/35 hover:border-red-400 hover:text-red-300"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+
+                  <button data-copy class="mt-8 block w-full text-left">
+                    <span class="font-display text-[clamp(1.8rem,4vw,2.7rem)] tracking-[.06em]">
+                      <span data-code-left>{"•".repeat(item.digits / 2)}</span>
+                      <i class="px-1 not-italic text-white/15">·</i>
+                      <span data-code-right>{"•".repeat(item.digits / 2)}</span>
+                    </span>
+                    <span class="mt-4 block h-0.5 bg-white/10">
+                      <i data-progress class="block h-full bg-acid" />
+                    </span>
+                  </button>
+
+                  <div class="mt-3 flex justify-between text-[9px] uppercase tracking-widest text-white/25">
+                    <span>{item.algorithm} · {item.digits} digits</span>
+                    <span data-seconds>{item.period}s</span>
+                  </div>
+                  <button
+                    data-copy
+                    title="Copy"
+                    class="mt-4 w-full border border-line py-2 text-[10px] uppercase tracking-widest text-white/50 hover:border-acid hover:text-acid"
+                  >
+                    Copy code ⧉
+                  </button>
+                </article>
+              ))}
+            </div>
+          </section>
+        )
+      }
     </main>
 
-    <dialog id="modal" class="w-[min(560px,calc(100%-24px))] border border-line bg-[#11130f] p-0 text-paper backdrop:bg-black/80">
-      <form id="form" class="grid gap-4 p-6">
-        <div class="flex items-center justify-between border-b border-line pb-4"><b id="modal-title">Add authenticator</b><button type="button" id="close" class="text-white/50">×</button></div>
-        <label class="grid gap-2 text-[10px] uppercase tracking-widest text-white/45">otpauth URI<input id="uri" class="border border-line bg-ink p-3 text-sm normal-case text-paper" placeholder="otpauth://totp/..." /></label>
-        <div class="grid grid-cols-2 gap-3"><label class="grid gap-2 text-[10px] uppercase tracking-widest text-white/45">Label<input id="label" required class="border border-line bg-ink p-3 text-sm normal-case text-paper" /></label><label class="grid gap-2 text-[10px] uppercase tracking-widest text-white/45">Issuer<input id="issuer" class="border border-line bg-ink p-3 text-sm normal-case text-paper" /></label></div>
-        <label class="grid gap-2 text-[10px] uppercase tracking-widest text-white/45">Base32 secret<input id="secret" required class="border border-line bg-ink p-3 font-mono text-sm normal-case text-paper" /></label>
-        <div class="grid grid-cols-3 gap-3"><select id="algorithm" class="border border-line bg-ink p-3"><option>SHA256</option><option>SHA1</option><option>SHA512</option></select><select id="digits" class="border border-line bg-ink p-3"><option>6</option><option>8</option></select><select id="period" class="border border-line bg-ink p-3"><option>30</option><option>60</option></select></div>
-        <p id="error" class="min-h-4 text-xs text-red-300"></p><button id="save" class="bg-acid p-4 font-bold text-ink">Encrypt & save</button>
-      </form>
-    </dialog>
-    <div id="toast" class="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 translate-y-3 bg-acid px-4 py-3 text-xs font-bold text-ink opacity-0 transition">CODE COPIED</div>
+    {
+      user && (
+        <dialog
+          id="modal"
+          class="w-[min(560px,calc(100%-24px))] border border-line bg-[#11130f] p-0 text-paper backdrop:bg-black/80"
+        >
+          <form id="form" class="grid gap-4 p-6">
+            <div class="flex items-center justify-between border-b border-line pb-4">
+              <b id="modal-title">Add authenticator</b>
+              <button type="button" id="close" class="text-white/50">×</button>
+            </div>
+            <label class="grid gap-2 text-[10px] uppercase tracking-widest text-white/45">
+              otpauth URI
+              <input
+                id="uri"
+                class="border border-line bg-ink p-3 text-sm normal-case text-paper"
+                placeholder="otpauth://totp/..."
+              />
+            </label>
+            <div class="grid grid-cols-2 gap-3">
+              <label class="grid gap-2 text-[10px] uppercase tracking-widest text-white/45">
+                Label
+                <input id="label" required class="border border-line bg-ink p-3 text-sm normal-case text-paper" />
+              </label>
+              <label class="grid gap-2 text-[10px] uppercase tracking-widest text-white/45">
+                Issuer
+                <input id="issuer" class="border border-line bg-ink p-3 text-sm normal-case text-paper" />
+              </label>
+            </div>
+            <label class="grid gap-2 text-[10px] uppercase tracking-widest text-white/45">
+              Base32 secret
+              <input id="secret" required class="border border-line bg-ink p-3 font-mono text-sm normal-case text-paper" />
+            </label>
+            <div class="grid grid-cols-3 gap-3">
+              <select id="algorithm" class="border border-line bg-ink p-3">
+                <option>SHA256</option>
+                <option>SHA1</option>
+                <option>SHA512</option>
+              </select>
+              <select id="digits" class="border border-line bg-ink p-3">
+                <option>6</option>
+                <option>8</option>
+              </select>
+              <select id="period" class="border border-line bg-ink p-3">
+                <option>30</option>
+                <option>60</option>
+              </select>
+            </div>
+            <p id="error" class="min-h-4 text-xs text-red-300" />
+            <button id="save" class="bg-acid p-4 font-bold text-ink">Encrypt & save</button>
+          </form>
+        </dialog>
+      )
+    }
+
+    <div
+      id="toast"
+      class="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 translate-y-3 bg-acid px-4 py-3 text-xs font-bold text-ink opacity-0 transition"
+    >
+      CODE COPIED
+    </div>
     <script src="../scripts/app.ts"></script>
   </body>
 </html>
