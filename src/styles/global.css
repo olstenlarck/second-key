@@ -17,6 +17,9 @@
     color: var(--color-paper);
     font-family: var(--font-mono);
   }
+  html[data-session-sync="true"] body > * {
+    visibility: hidden;
+  }
   button {
     cursor: pointer;
   }
