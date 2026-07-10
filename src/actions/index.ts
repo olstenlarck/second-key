@@ -2,7 +2,7 @@ import { ActionError, defineAction } from "astro:actions";
 import { z } from "astro/zod";
 import { env } from "cloudflare:workers";
 
-import { createItem, createShooSession, deleteItem, getUser, updateItem } from "../lib/server";
+import { createItem, deleteItem, getUser, updateItem } from "../lib/server";
 
 const tokenInput = z.object({
   label: z.string().min(1).max(80),
@@ -26,24 +26,9 @@ async function requireUser(request: Request) {
 }
 
 export const server = {
-  signIn: defineAction({
-    input: z.object({ idToken: z.string().min(1) }),
-    handler: async ({ idToken }, context) => {
-      const session = await createShooSession(idToken, env as Env);
-      context.cookies.set("totp_session", session, {
-        httpOnly: true,
-        maxAge: 86_400,
-        path: "/",
-        sameSite: "lax",
-        secure: true,
-      });
-
-      return { ok: true };
-    },
-  }),
-
   logout: defineAction({
     handler: async (_, context) => {
+      context.cookies.delete("shoo_identity", { path: "/" });
       context.cookies.delete("totp_session", { path: "/" });
 
       return { ok: true };
