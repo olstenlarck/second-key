@@ -14,7 +14,7 @@ export type TotpItem = {
 };
 
 export type SessionUser = {
-  sub: string;
+  id: string;
   name: string;
   exp: number;
 };
@@ -23,7 +23,6 @@ type TokenMetadata = {
   sealed: string;
 };
 
-const vaultOwnerKey = "vault:owner";
 let jwks: { exp: number; keys: Array<JsonWebKey & { kid?: string }> } | undefined;
 
 function encodeBase64(bytes: Uint8Array): string {
@@ -118,7 +117,17 @@ export async function getUser(request: Request, env: Env): Promise<SessionUser |
       decodeBase64(signature),
       encoder.encode(payload),
     );
-    const user = JSON.parse(decoder.decode(decodeBase64(payload))) as SessionUser;
+    const legacy = JSON.parse(decoder.decode(decodeBase64(payload))) as {
+      exp: number;
+      id?: string;
+      name: string;
+      sub?: string;
+    };
+    const user: SessionUser = {
+      exp: legacy.exp,
+      id: legacy.id || legacy.sub || "",
+      name: legacy.name,
+    };
 
     return valid && user.exp > Date.now() ? user : null;
   } catch {
@@ -171,11 +180,15 @@ async function verifyShooToken(token: string): Promise<Record<string, string | n
 
 export async function verifyShooIdentity(idToken: string): Promise<SessionUser> {
   const identity = await verifyShooToken(idToken);
+  const email = String(identity.email || "")
+    .trim()
+    .toLowerCase();
+  if (!email) throw new Error("Shoo identity token did not include an email address");
 
   return {
     exp: Number(identity.exp) * 1_000,
+    id: email,
     name: String(identity.name || "Signed-in user"),
-    sub: String(identity.pairwise_sub),
   };
 }
 
@@ -199,8 +212,8 @@ function validItem(item: TotpItem): boolean {
   return Boolean(item.label) && /^[A-Z2-7]{16,256}$/.test(item.secret);
 }
 
-function tokenPrefix(sub: string): string {
-  return `u:${sub}:`;
+function tokenPrefix(identity: string): string {
+  return `u:${identity}:`;
 }
 
 function slugify(label: string): string {
@@ -214,12 +227,12 @@ function slugify(label: string): string {
   );
 }
 
-function tokenKey(sub: string, item: TotpItem): string {
-  return `${tokenPrefix(sub)}${slugify(item.label)}-${item.id.slice(0, 8)}`;
+function tokenKey(identity: string, item: TotpItem): string {
+  return `${tokenPrefix(identity)}${slugify(item.label)}-${item.id.slice(0, 8)}`;
 }
 
 async function listStoredItems(
-  sub: string,
+  identity: string,
   env: Env,
 ): Promise<Array<{ key: string; item: TotpItem }>> {
   const records: Array<{ key: string; item: TotpItem }> = [];
@@ -227,7 +240,7 @@ async function listStoredItems(
 
   do {
     const page = await env.TOTP_KV.list<TokenMetadata>({
-      prefix: tokenPrefix(sub),
+      prefix: tokenPrefix(identity),
       cursor,
       limit: 1_000,
     });
@@ -247,23 +260,14 @@ async function listStoredItems(
   return records;
 }
 
-async function putItem(sub: string, item: TotpItem, env: Env): Promise<void> {
-  await env.TOTP_KV.put(tokenKey(sub, item), "", {
+async function putItem(identity: string, item: TotpItem, env: Env): Promise<void> {
+  await env.TOTP_KV.put(tokenKey(identity, item), "", {
     metadata: { sealed: await seal(item, env) } satisfies TokenMetadata,
   });
 }
 
-async function ownsVault(sub: string, env: Env): Promise<boolean> {
-  const owner = await env.TOTP_KV.get(vaultOwnerKey);
-  if (owner) return owner === sub;
-
-  await env.TOTP_KV.put(vaultOwnerKey, sub);
-
-  return true;
-}
-
-async function migrateLegacyItems(sub: string, env: Env): Promise<void> {
-  const legacyKey = `u:${sub}`;
+async function migrateLegacyItems(identity: string, env: Env): Promise<void> {
+  const legacyKey = `u:${identity}`;
   const legacyItems = await env.TOTP_KV.get<Array<TotpItem & { secret: string }>>(
     legacyKey,
     "json",
@@ -275,19 +279,40 @@ async function migrateLegacyItems(sub: string, env: Env): Promise<void> {
       ...legacyItem,
       secret: await unseal<string>(legacyItem.secret, env),
     });
-    await putItem(sub, item, env);
+    await putItem(identity, item, env);
   }
 
   await env.TOTP_KV.delete(legacyKey);
 }
 
-export async function getItems(sub: string, env: Env): Promise<TotpItem[]> {
-  if (!(await ownsVault(sub, env))) return [];
+async function movePreviousVault(identity: string, env: Env): Promise<void> {
+  const destinationPrefix = tokenPrefix(identity);
+  const allKeys = await env.TOTP_KV.list<TokenMetadata>({ prefix: "u:", limit: 1_000 });
+  const candidates = allKeys.keys.filter(({ name, metadata }) => {
+    return !name.startsWith(destinationPrefix) && Boolean(metadata?.sealed);
+  });
+  const sourcePrefixes = [
+    ...new Set(candidates.map(({ name }) => name.slice(0, name.lastIndexOf(":") + 1))),
+  ];
+  if (sourcePrefixes.length !== 1) return;
 
-  let records = await listStoredItems(sub, env);
+  const sourcePrefix = sourcePrefixes[0];
+  for (const record of candidates) {
+    await env.TOTP_KV.put(`${destinationPrefix}${record.name.slice(sourcePrefix.length)}`, "", {
+      metadata: record.metadata,
+    });
+  }
+
+  await Promise.all(candidates.map(({ name }) => env.TOTP_KV.delete(name)));
+  await env.TOTP_KV.delete("vault:owner");
+}
+
+export async function getItems(identity: string, env: Env): Promise<TotpItem[]> {
+  let records = await listStoredItems(identity, env);
   if (records.length === 0) {
-    await migrateLegacyItems(sub, env);
-    records = await listStoredItems(sub, env);
+    await migrateLegacyItems(identity, env);
+    await movePreviousVault(identity, env);
+    records = await listStoredItems(identity, env);
   }
 
   return records
@@ -295,72 +320,40 @@ export async function getItems(sub: string, env: Env): Promise<TotpItem[]> {
     .sort((left, right) => left.label.localeCompare(right.label));
 }
 
-export async function recoverVault(sub: string, env: Env): Promise<number> {
-  if (!(await ownsVault(sub, env))) throw new Error("Vault belongs to another identity");
-  if ((await listStoredItems(sub, env)).length > 0) return 0;
-
-  const allKeys = await env.TOTP_KV.list<TokenMetadata>({ prefix: "u:", limit: 1_000 });
-  const sourceOwners = [
-    ...new Set(
-      allKeys.keys.map(({ name }) => name.split(":")[1]).filter((owner) => owner && owner !== sub),
-    ),
-  ];
-  if (sourceOwners.length !== 1) throw new Error("Existing vault could not be identified safely");
-
-  const sourcePrefix = tokenPrefix(sourceOwners[0]);
-  const records = allKeys.keys.filter(({ name, metadata }) => {
-    return name.startsWith(sourcePrefix) && Boolean(metadata?.sealed);
-  });
-
-  for (const record of records) {
-    await env.TOTP_KV.put(`${tokenPrefix(sub)}${record.name.slice(sourcePrefix.length)}`, "", {
-      metadata: record.metadata,
-    });
-  }
-
-  return records.length;
-}
-
 export async function createItem(
-  sub: string,
+  identity: string,
   input: Partial<TotpItem>,
   env: Env,
 ): Promise<TotpItem> {
-  if (!(await ownsVault(sub, env))) throw new Error("Vault belongs to another identity");
-
   const item = normalize(input);
   if (!validItem(item)) throw new Error("Invalid token");
 
-  await putItem(sub, item, env);
+  await putItem(identity, item, env);
 
   return item;
 }
 
 export async function updateItem(
-  sub: string,
+  identity: string,
   id: string,
   input: Partial<TotpItem>,
   env: Env,
 ): Promise<TotpItem> {
-  if (!(await ownsVault(sub, env))) throw new Error("Vault belongs to another identity");
-
-  const records = await listStoredItems(sub, env);
+  const records = await listStoredItems(identity, env);
   const current = records.find(({ item }) => item.id === id);
   if (!current) throw new Error("Token not found");
 
   const item = normalize({ ...current.item, ...input, id });
   if (!validItem(item)) throw new Error("Invalid token");
 
-  await putItem(sub, item, env);
-  if (current.key !== tokenKey(sub, item)) await env.TOTP_KV.delete(current.key);
+  await putItem(identity, item, env);
+  if (current.key !== tokenKey(identity, item)) await env.TOTP_KV.delete(current.key);
 
   return item;
 }
 
-export async function deleteItem(sub: string, id: string, env: Env): Promise<void> {
-  if (!(await ownsVault(sub, env))) throw new Error("Vault belongs to another identity");
-
-  const records = await listStoredItems(sub, env);
+export async function deleteItem(identity: string, id: string, env: Env): Promise<void> {
+  const records = await listStoredItems(identity, env);
   const current = records.find(({ item }) => item.id === id);
   if (!current) throw new Error("Token not found");
 
