@@ -2,7 +2,7 @@ import { ActionError, defineAction } from "astro:actions";
 import { z } from "astro/zod";
 import { env } from "cloudflare:workers";
 
-import { createItem, deleteItem, getUser, updateItem } from "../lib/server";
+import { createItem, deleteItem, getUser, recoverVault, updateItem } from "../lib/server";
 
 const tokenInput = z.object({
   label: z.string().min(1).max(80),
@@ -61,6 +61,14 @@ export const server = {
       await deleteItem(user.sub, id, env as Env);
 
       return { ok: true };
+    },
+  }),
+
+  recoverVault: defineAction({
+    handler: async (_, context) => {
+      const user = await requireUser(context.request);
+
+      return { count: await recoverVault(user.sub, env as Env) };
     },
   }),
 };
