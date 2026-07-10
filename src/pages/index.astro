@@ -9,7 +9,7 @@ import { getItems, getUser } from "../lib/server";
 import "../styles/global.css";
 
 const user = await getUser(Astro.request, env as Env);
-const items = user ? await getItems(user.sub, env as Env) : [];
+const items = user ? await getItems(user.id, env as Env) : [];
 const initials = user?.name
   .split(" ")
   .slice(0, 2)
