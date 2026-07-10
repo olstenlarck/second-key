@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
 
-import { actions } from "astro:actions";
-
 export function LoginButton() {
   const [status, setStatus] = useState<"idle" | "syncing" | "error">("idle");
 
@@ -9,11 +7,15 @@ export function LoginButton() {
     const identity = window.Shoo?.getIdentity();
     if (!identity?.token) return;
 
+    if (document.cookie.includes("shoo_identity=")) {
+      setStatus("error");
+
+      return;
+    }
+
     setStatus("syncing");
-    actions.signIn
-      .orThrow({ idToken: identity.token })
-      .then(() => window.location.reload())
-      .catch(() => setStatus("error"));
+    document.cookie = `shoo_identity=${encodeURIComponent(identity.token)}; Path=/; Secure; SameSite=Lax; Max-Age=3600`;
+    window.location.reload();
   }, []);
 
   if (status === "syncing") {
