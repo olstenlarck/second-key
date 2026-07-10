@@ -7,3 +7,9 @@ interface Env {
   TOTP_KV: KVNamespace;
   MASTER_KEY: string;
 }
+interface Window {
+  Shoo?: {
+    clearIdentity(): void;
+    startSignIn(options: { requestPii: boolean; returnTo: string }): Promise<unknown>;
+  };
+}
