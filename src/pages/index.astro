@@ -19,7 +19,7 @@ const initials = user?.name
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang="en" data-authenticated={Boolean(user)}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
@@ -27,6 +27,14 @@ const initials = user?.name
     <link rel="icon" href="/favicon.svg" />
     <title>Second Key</title>
     <script is:inline src="https://shoo.dev/shoo.js"></script>
+    <script is:inline>
+      if (
+        document.documentElement.dataset.authenticated !== "true" &&
+        window.Shoo?.getIdentity().token
+      ) {
+        document.documentElement.dataset.sessionSync = "true";
+      }
+    </script>
   </head>
   <body class="min-h-screen bg-ink text-paper">
     <header class="sticky top-0 z-30 border-b border-line bg-ink/90 backdrop-blur-xl">
