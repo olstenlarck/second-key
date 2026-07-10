@@ -45,7 +45,7 @@ export function LoginButton() {
         </p>
       )}
       <button
-        className="mt-8 w-full bg-acid px-5 py-4 font-bold text-ink transition hover:translate-x-1 hover:translate-y-1"
+        className="mt-9 rounded-full bg-acid px-6 py-4 text-sm font-bold text-ink transition hover:-translate-y-0.5 hover:shadow-[0_12px_32px_rgba(255,138,76,.2)]"
         onClick={() => {
           sessionStorage.removeItem(attemptKey);
           void window.Shoo?.startSignIn({ requestPii: true, returnTo: "/" });
