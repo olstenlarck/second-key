@@ -1,11 +1,11 @@
 @import "tailwindcss";
 @theme {
-  --color-ink: #090a09;
-  --color-paper: #f2f1ea;
-  --color-acid: #c9ff4d;
-  --color-line: #2b2e29;
-  --font-display: "Arial Black", "Helvetica Neue", sans-serif;
-  --font-mono: "IBM Plex Mono", "SFMono-Regular", monospace;
+  --color-ink: #131312;
+  --color-paper: #fff6e9;
+  --color-acid: #ff8a4c;
+  --color-line: #393733;
+  --font-display: "Arial Black", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SFMono-Regular", "Cascadia Mono", "Roboto Mono", monospace;
 }
 @layer base {
   * {
@@ -13,7 +13,8 @@
   }
   body {
     margin: 0;
-    background: var(--color-ink);
+    background:
+      radial-gradient(circle at 84% -8%, rgb(255 138 76 / 12%), transparent 25rem), var(--color-ink);
     color: var(--color-paper);
     font-family: var(--font-mono);
   }
@@ -22,6 +23,9 @@
   }
   button {
     cursor: pointer;
+  }
+  dialog::backdrop {
+    backdrop-filter: blur(8px);
   }
   button:focus-visible,
   input:focus-visible,
