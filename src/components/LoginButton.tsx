@@ -25,7 +25,6 @@ export function LoginButton() {
     })
       .then((response) => {
         if (!response.ok) throw new Error("Session creation failed");
-        sessionStorage.removeItem(attemptKey);
         window.location.reload();
       })
       .catch(() => setStatus("error"));
