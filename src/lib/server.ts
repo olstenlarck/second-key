@@ -285,7 +285,10 @@ async function migrateLegacyItems(identity: string, env: Env): Promise<void> {
   await env.TOTP_KV.delete(legacyKey);
 }
 
-async function movePreviousVault(identity: string, env: Env): Promise<void> {
+async function movePreviousVault(
+  identity: string,
+  env: Env,
+): Promise<Array<{ key: string; item: TotpItem }>> {
   const destinationPrefix = tokenPrefix(identity);
   const allKeys = await env.TOTP_KV.list<TokenMetadata>({ prefix: "u:", limit: 1_000 });
   const candidates = allKeys.keys.filter(({ name, metadata }) => {
@@ -294,9 +297,15 @@ async function movePreviousVault(identity: string, env: Env): Promise<void> {
   const sourcePrefixes = [
     ...new Set(candidates.map(({ name }) => name.slice(0, name.lastIndexOf(":") + 1))),
   ];
-  if (sourcePrefixes.length !== 1) return;
+  if (sourcePrefixes.length !== 1) return [];
 
   const sourcePrefix = sourcePrefixes[0];
+  const records = await Promise.all(
+    candidates.map(async (record) => ({
+      item: await unseal<TotpItem>(record.metadata!.sealed, env),
+      key: record.name,
+    })),
+  );
   for (const record of candidates) {
     await env.TOTP_KV.put(`${destinationPrefix}${record.name.slice(sourcePrefix.length)}`, "", {
       metadata: record.metadata,
@@ -305,14 +314,16 @@ async function movePreviousVault(identity: string, env: Env): Promise<void> {
 
   await Promise.all(candidates.map(({ name }) => env.TOTP_KV.delete(name)));
   await env.TOTP_KV.delete("vault:owner");
+
+  return records;
 }
 
 export async function getItems(identity: string, env: Env): Promise<TotpItem[]> {
   let records = await listStoredItems(identity, env);
   if (records.length === 0) {
     await migrateLegacyItems(identity, env);
-    await movePreviousVault(identity, env);
-    records = await listStoredItems(identity, env);
+    records = await movePreviousVault(identity, env);
+    if (records.length === 0) records = await listStoredItems(identity, env);
   }
 
   return records
