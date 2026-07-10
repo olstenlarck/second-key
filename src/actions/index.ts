@@ -2,7 +2,7 @@ import { ActionError, defineAction } from "astro:actions";
 import { z } from "astro/zod";
 import { env } from "cloudflare:workers";
 
-import { createItem, deleteItem, getUser, recoverVault, updateItem } from "../lib/server";
+import { createItem, deleteItem, getUser, updateItem } from "../lib/server";
 
 const tokenInput = z.object({
   label: z.string().min(1).max(80),
@@ -41,7 +41,7 @@ export const server = {
     handler: async (input, context) => {
       const user = await requireUser(context.request);
 
-      return createItem(user.sub, input, env as Env);
+      return createItem(user.id, input, env as Env);
     },
   }),
 
@@ -50,7 +50,7 @@ export const server = {
     handler: async ({ id, ...input }, context) => {
       const user = await requireUser(context.request);
 
-      return updateItem(user.sub, id, input, env as Env);
+      return updateItem(user.id, id, input, env as Env);
     },
   }),
 
@@ -58,17 +58,9 @@ export const server = {
     input: z.object({ id: z.uuid() }),
     handler: async ({ id }, context) => {
       const user = await requireUser(context.request);
-      await deleteItem(user.sub, id, env as Env);
+      await deleteItem(user.id, id, env as Env);
 
       return { ok: true };
-    },
-  }),
-
-  recoverVault: defineAction({
-    handler: async (_, context) => {
-      const user = await requireUser(context.request);
-
-      return { count: await recoverVault(user.sub, env as Env) };
     },
   }),
 };
