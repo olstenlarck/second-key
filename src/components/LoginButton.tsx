@@ -27,11 +27,14 @@ export function LoginButton() {
         if (!response.ok) throw new Error("Session creation failed");
         window.location.reload();
       })
-      .catch(() => setStatus("error"));
+      .catch(() => {
+        document.documentElement.removeAttribute("data-session-sync");
+        setStatus("error");
+      });
   }, []);
 
   if (status === "syncing") {
-    return <p className="mt-8 text-sm text-white/50">Opening your vault…</p>;
+    return null;
   }
 
   return (
