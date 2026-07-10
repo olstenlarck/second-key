@@ -1,24 +1,23 @@
-import { env } from "cloudflare:workers";
-
-import { createShooSession } from "../lib/server";
+import { verifyShooIdentity } from "../lib/server";
 
 import type { APIRoute } from "astro";
 
-export const POST: APIRoute = async ({ cookies, request }) => {
+export const POST: APIRoute = async ({ request }) => {
   try {
     const { idToken } = (await request.json()) as { idToken?: string };
     if (!idToken) return new Response(null, { status: 400 });
 
-    const session = await createShooSession(idToken, env as Env);
-    cookies.set("totp_session", session, {
-      httpOnly: true,
-      maxAge: 86_400,
-      path: "/",
-      sameSite: "lax",
-      secure: true,
-    });
+    const identity = await verifyShooIdentity(idToken);
+    const maxAge = Math.max(1, Math.floor((identity.exp - Date.now()) / 1_000));
 
-    return new Response(null, { status: 204 });
+    return new Response(JSON.stringify({ ok: true }), {
+      headers: {
+        "cache-control": "no-store",
+        "content-type": "application/json",
+        "set-cookie": `shoo_session=${idToken}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`,
+      },
+      status: 200,
+    });
   } catch {
     return new Response(null, { status: 401 });
   }
