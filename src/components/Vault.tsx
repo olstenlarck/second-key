@@ -152,7 +152,6 @@ function TokenCard({
 
 export function Vault({ initialItems }: { initialItems: TotpItem[] }) {
   const [items, setItems] = useState(initialItems);
-  const [recovering, setRecovering] = useState(false);
   const [hidden, setHidden] = useState(true);
   const [editing, setEditing] = useState<TotpItem>();
   const [draft, setDraft] = useState<Draft>(emptyDraft);
@@ -195,17 +194,6 @@ export function Vault({ initialItems }: { initialItems: TotpItem[] }) {
     window.setTimeout(() => setToast(false), 1_300);
   }
 
-  async function recover() {
-    setRecovering(true);
-    try {
-      await actions.recoverVault.orThrow();
-      window.location.reload();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to recover vault");
-      setRecovering(false);
-    }
-  }
-
   return (
     <>
       <div className="mb-8 flex flex-wrap items-end justify-between gap-5">
@@ -233,17 +221,8 @@ export function Vault({ initialItems }: { initialItems: TotpItem[] }) {
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {items.length === 0 && (
-          <div className="col-span-full border border-line py-20 text-center text-sm text-white/35">
-            <p>No codes found for this Shoo identity.</p>
-            <button
-              className="mt-6 border border-acid px-5 py-3 text-xs font-bold text-acid"
-              disabled={recovering}
-              onClick={recover}
-              type="button"
-            >
-              {recovering ? "Recovering…" : "Recover existing vault"}
-            </button>
-            {error && <p className="mt-4 text-xs text-red-300">{error}</p>}
+          <div className="col-span-full border border-line py-24 text-center text-sm text-white/35">
+            No codes yet.
           </div>
         )}
         {items.map((item) => (
