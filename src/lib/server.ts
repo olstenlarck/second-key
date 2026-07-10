@@ -100,6 +100,15 @@ async function unseal<T>(value: string, env: Env): Promise<T> {
 }
 
 export async function getUser(request: Request, env: Env): Promise<SessionUser | null> {
+  const shooSession = readCookie(request, "shoo_session");
+  if (shooSession) {
+    try {
+      return await verifyShooIdentity(shooSession);
+    } catch {
+      return null;
+    }
+  }
+
   try {
     const [payload, signature] = readCookie(request, "totp_session")!.split(".");
     const valid = await crypto.subtle.verify(
@@ -114,23 +123,6 @@ export async function getUser(request: Request, env: Env): Promise<SessionUser |
   } catch {
     return null;
   }
-}
-
-async function createSession(sub: string, name: string, env: Env): Promise<string> {
-  const payload = encodeBase64(
-    encoder.encode(
-      JSON.stringify({
-        sub,
-        name: name || "Signed-in user",
-        exp: Date.now() + 86_400_000,
-      }),
-    ),
-  );
-  const signature = new Uint8Array(
-    await crypto.subtle.sign("HMAC", await cryptoKey(env, "hmac"), encoder.encode(payload)),
-  );
-
-  return `${payload}.${encodeBase64(signature)}`;
 }
 
 async function verifyShooToken(token: string): Promise<Record<string, string | number>> {
@@ -176,10 +168,14 @@ async function verifyShooToken(token: string): Promise<Record<string, string | n
   return payload;
 }
 
-export async function createShooSession(idToken: string, env: Env): Promise<string> {
+export async function verifyShooIdentity(idToken: string): Promise<SessionUser> {
   const identity = await verifyShooToken(idToken);
 
-  return createSession(String(identity.pairwise_sub), String(identity.name || ""), env);
+  return {
+    exp: Number(identity.exp) * 1_000,
+    name: String(identity.name || "Signed-in user"),
+    sub: String(identity.pairwise_sub),
+  };
 }
 
 function normalize(input: Partial<TotpItem>): TotpItem {
