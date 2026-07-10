@@ -29,6 +29,7 @@ export const server = {
   logout: defineAction({
     handler: async (_, context) => {
       context.cookies.delete("shoo_identity", { path: "/" });
+      context.cookies.delete("shoo_session", { path: "/" });
       context.cookies.delete("totp_session", { path: "/" });
 
       return { ok: true };
