@@ -10,6 +10,7 @@ interface Env {
 interface Window {
   Shoo?: {
     clearIdentity(): void;
+    getIdentity(): { token?: string };
     startSignIn(options: { requestPii: boolean; returnTo: string }): Promise<unknown>;
   };
 }
