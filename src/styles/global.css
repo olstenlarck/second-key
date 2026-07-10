@@ -1,11 +1,12 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 @theme {
   --color-ink: #131312;
   --color-paper: #fff6e9;
   --color-acid: #ff8a4c;
   --color-line: #393733;
-  --font-display: "Arial Black", "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "SFMono-Regular", "Cascadia Mono", "Roboto Mono", monospace;
+  --font-display: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "DM Mono", "SFMono-Regular", "Cascadia Mono", monospace;
 }
 @layer base {
   * {
