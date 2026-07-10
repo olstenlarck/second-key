@@ -23,6 +23,7 @@ type TokenMetadata = {
   sealed: string;
 };
 
+const vaultOwnerKey = "vault:owner";
 let jwks: { exp: number; keys: Array<JsonWebKey & { kid?: string }> } | undefined;
 
 function encodeBase64(bytes: Uint8Array): string {
@@ -252,6 +253,15 @@ async function putItem(sub: string, item: TotpItem, env: Env): Promise<void> {
   });
 }
 
+async function ownsVault(sub: string, env: Env): Promise<boolean> {
+  const owner = await env.TOTP_KV.get(vaultOwnerKey);
+  if (owner) return owner === sub;
+
+  await env.TOTP_KV.put(vaultOwnerKey, sub);
+
+  return true;
+}
+
 async function migrateLegacyItems(sub: string, env: Env): Promise<void> {
   const legacyKey = `u:${sub}`;
   const legacyItems = await env.TOTP_KV.get<Array<TotpItem & { secret: string }>>(
@@ -272,6 +282,8 @@ async function migrateLegacyItems(sub: string, env: Env): Promise<void> {
 }
 
 export async function getItems(sub: string, env: Env): Promise<TotpItem[]> {
+  if (!(await ownsVault(sub, env))) return [];
+
   let records = await listStoredItems(sub, env);
   if (records.length === 0) {
     await migrateLegacyItems(sub, env);
@@ -283,11 +295,39 @@ export async function getItems(sub: string, env: Env): Promise<TotpItem[]> {
     .sort((left, right) => left.label.localeCompare(right.label));
 }
 
+export async function recoverVault(sub: string, env: Env): Promise<number> {
+  if (!(await ownsVault(sub, env))) throw new Error("Vault belongs to another identity");
+  if ((await listStoredItems(sub, env)).length > 0) return 0;
+
+  const allKeys = await env.TOTP_KV.list<TokenMetadata>({ prefix: "u:", limit: 1_000 });
+  const sourceOwners = [
+    ...new Set(
+      allKeys.keys.map(({ name }) => name.split(":")[1]).filter((owner) => owner && owner !== sub),
+    ),
+  ];
+  if (sourceOwners.length !== 1) throw new Error("Existing vault could not be identified safely");
+
+  const sourcePrefix = tokenPrefix(sourceOwners[0]);
+  const records = allKeys.keys.filter(({ name, metadata }) => {
+    return name.startsWith(sourcePrefix) && Boolean(metadata?.sealed);
+  });
+
+  for (const record of records) {
+    await env.TOTP_KV.put(`${tokenPrefix(sub)}${record.name.slice(sourcePrefix.length)}`, "", {
+      metadata: record.metadata,
+    });
+  }
+
+  return records.length;
+}
+
 export async function createItem(
   sub: string,
   input: Partial<TotpItem>,
   env: Env,
 ): Promise<TotpItem> {
+  if (!(await ownsVault(sub, env))) throw new Error("Vault belongs to another identity");
+
   const item = normalize(input);
   if (!validItem(item)) throw new Error("Invalid token");
 
@@ -302,6 +342,8 @@ export async function updateItem(
   input: Partial<TotpItem>,
   env: Env,
 ): Promise<TotpItem> {
+  if (!(await ownsVault(sub, env))) throw new Error("Vault belongs to another identity");
+
   const records = await listStoredItems(sub, env);
   const current = records.find(({ item }) => item.id === id);
   if (!current) throw new Error("Token not found");
@@ -316,6 +358,8 @@ export async function updateItem(
 }
 
 export async function deleteItem(sub: string, id: string, env: Env): Promise<void> {
+  if (!(await ownsVault(sub, env))) throw new Error("Vault belongs to another identity");
+
   const records = await listStoredItems(sub, env);
   const current = records.find(({ item }) => item.id === id);
   if (!current) throw new Error("Token not found");
