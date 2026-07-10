@@ -91,13 +91,13 @@ function TokenCard({
   const midpoint = item.digits / 2;
 
   return (
-    <article className="group min-w-0 rounded-[1.45rem] border border-line bg-paper/[.035] p-5 transition hover:-translate-y-0.5 hover:border-paper/30 hover:bg-paper/[.055]">
+    <article className="group min-w-0 rounded-2xl border border-line bg-paper/[.025] p-4 transition hover:border-paper/30 hover:bg-paper/[.045]">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-[10px] font-bold uppercase tracking-[.16em] text-paper/75">
             {item.issuer || "TOTP"}
           </p>
-          <h2 className="mt-2 truncate text-sm font-bold text-paper">{item.label}</h2>
+          <h2 className="mt-1 truncate text-sm font-bold text-paper">{item.label}</h2>
         </div>
         <div className="flex gap-1">
           <button
@@ -119,33 +119,34 @@ function TokenCard({
         </div>
       </div>
 
-      <button className="mt-9 block w-full text-left" onClick={copy} type="button">
-        <span className="font-display text-[clamp(2rem,4vw,2.9rem)] tracking-[.035em] text-paper">
-          {visible.slice(0, midpoint)}
-          <i className="px-1 not-italic text-paper/25">·</i>
-          {visible.slice(midpoint)}
-        </span>
-        <span className="mt-5 block h-1 overflow-hidden rounded-full bg-paper/10">
+      <div className="mt-6 flex items-center justify-between gap-3">
+        <button className="min-w-0 text-left" onClick={copy} type="button">
+          <span className="font-display text-4xl leading-none tracking-normal text-paper">
+            {visible.slice(0, midpoint)}
+            <i className="px-1 not-italic text-paper/25">·</i>
+            {visible.slice(midpoint)}
+          </span>
+        </button>
+        <button
+          className="grid size-10 shrink-0 place-items-center rounded-full border border-line text-sm text-paper/70 transition hover:border-acid hover:bg-acid hover:text-ink"
+          onClick={copy}
+          title="Copy code"
+          type="button"
+        >
+          <span aria-hidden="true">⧉</span>
+        </button>
+      </div>
+
+      <div className="mt-5 flex items-center gap-3">
+        <span className="h-1 flex-1 overflow-hidden rounded-full bg-paper/10">
           <i
             className="block h-full rounded-full bg-acid"
             style={{ width: `${(seconds / item.period) * 100}%` }}
           />
         </span>
-      </button>
-
-      <div className="mt-4 flex justify-between text-[9px] font-bold uppercase tracking-widest text-paper/45">
-        <span>
-          {item.algorithm} · {item.digits} digits
-        </span>
-        <span>{seconds}s</span>
+        <span className="shrink-0 text-[10px] font-bold text-paper/55">{seconds}s</span>
+        <span className="shrink-0 text-[10px] font-bold text-paper/55">{item.algorithm}</span>
       </div>
-      <button
-        className="mt-5 flex w-full items-center justify-center gap-2 rounded-full border border-line py-2.5 text-[10px] font-bold uppercase tracking-widest text-paper/65 transition hover:border-acid hover:bg-acid hover:text-ink"
-        onClick={copy}
-        type="button"
-      >
-        Copy code <span aria-hidden="true">⧉</span>
-      </button>
     </article>
   );
 }
@@ -201,7 +202,7 @@ export function Vault({ initialItems }: { initialItems: TotpItem[] }) {
           <p className="text-[10px] font-bold uppercase tracking-[.24em] text-acid">
             Your interval
           </p>
-          <h1 className="mt-3 font-display text-5xl tracking-[-.075em] sm:text-6xl">
+          <h1 className="mt-3 font-display text-5xl tracking-normal sm:text-6xl">
             Ready when you are.
           </h1>
         </div>
@@ -214,7 +215,7 @@ export function Vault({ initialItems }: { initialItems: TotpItem[] }) {
             {hidden ? "Show codes" : "Hide codes"}
           </button>
           <button
-            className="rounded-full bg-acid px-5 py-3 text-sm font-bold text-ink transition hover:-translate-y-0.5"
+            className="rounded-full bg-acid px-5 py-3 text-sm font-bold text-ink transition hover:bg-[#ff9f6d] active:scale-[.98]"
             onClick={() => open()}
             type="button"
           >
@@ -223,7 +224,7 @@ export function Vault({ initialItems }: { initialItems: TotpItem[] }) {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         {items.length === 0 && (
           <div className="col-span-full rounded-[1.5rem] border border-dashed border-line py-24 text-center text-sm text-paper/50">
             Your next code lives here.
@@ -309,7 +310,7 @@ export function Vault({ initialItems }: { initialItems: TotpItem[] }) {
             </select>
           </div>
           <p className="min-h-4 text-xs text-red-300">{error}</p>
-          <button className="rounded-full bg-acid p-4 font-bold text-ink transition hover:-translate-y-0.5">
+          <button className="rounded-full bg-acid p-4 font-bold text-ink transition hover:bg-[#ff9f6d] active:scale-[.98]">
             Save code
           </button>
         </form>
