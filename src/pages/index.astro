@@ -23,9 +23,9 @@ const initials = user?.name
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
-    <meta name="theme-color" content="#090a09" />
+    <meta name="theme-color" content="#131312" />
     <link rel="icon" href="/favicon.svg" />
-    <title>Second Key</title>
+    <title>Interval</title>
     <script is:inline src="https://shoo.dev/shoo.js"></script>
     <script is:inline>
       if (
@@ -37,21 +37,24 @@ const initials = user?.name
     </script>
   </head>
   <body class="min-h-screen bg-ink text-paper">
-    <header class="sticky top-0 z-30 border-b border-line bg-ink/90 backdrop-blur-xl">
-      <div class="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 lg:px-8">
+    <header class="relative z-30 border-b border-line/80 bg-ink/80 backdrop-blur-xl">
+      <div class="mx-auto flex h-[5.5rem] max-w-7xl items-center justify-between px-5 lg:px-8">
         <a href="/" class="flex items-center gap-3 no-underline">
-          <span class="grid size-10 place-items-center bg-acid font-display text-xl text-ink">Ⅱ</span>
-          <span class="font-display text-lg tracking-tight">SECOND KEY</span>
+          <span class="grid size-10 place-items-center rounded-full bg-acid font-display text-base text-ink">•</span>
+          <span>
+            <b class="block font-display text-lg leading-none tracking-[-.06em]">INTERVAL</b>
+            <small class="mt-1 block text-[8px] font-bold tracking-[.2em] text-paper/45">TIME-BASED CODES</small>
+          </span>
         </a>
         {
           user && (
             <div class="flex items-center gap-3">
               <a href="https://shoo.dev/me" target="_blank" rel="noopener" class="flex items-center gap-3 border-r border-line pr-4 text-right no-underline">
                 <span>
-                  <b class="block text-xs">{user.name}</b>
-                  <small class="text-[9px] uppercase tracking-widest text-white/40">Manage profile ↗</small>
+                  <b class="block text-xs text-paper">{user.name}</b>
+                  <small class="text-[9px] uppercase tracking-widest text-paper/55">Manage profile ↗</small>
                 </span>
-                <span class="grid size-9 place-items-center border border-white/20 text-xs text-acid">{initials}</span>
+                <span class="grid size-9 place-items-center rounded-full bg-paper/8 text-xs font-bold text-acid">{initials}</span>
               </a>
               <LogoutButton client:load />
             </div>
@@ -60,17 +63,34 @@ const initials = user?.name
       </div>
     </header>
 
-    <main class="mx-auto max-w-7xl px-5 py-10 lg:px-8 lg:py-16">
+    <main class="mx-auto max-w-7xl px-5 py-10 lg:px-8 lg:py-14">
       {
         user ? (
           <Vault client:load initialItems={items} />
         ) : (
-          <section class="grid min-h-[65vh] place-items-center">
-            <div class="w-full max-w-md border border-line bg-[#10120f] p-7 shadow-[10px_10px_0_#1d211a]">
-              <p class="mb-4 text-[10px] uppercase tracking-[.22em] text-acid">Private authenticator</p>
-              <h1 class="font-display text-4xl leading-[.95] tracking-[-.055em]">Codes without<br />the clutter.</h1>
-              <p class="mt-5 text-sm leading-6 text-white/50">Encrypted TOTP storage, protected by your Google identity.</p>
+          <section class="grid min-h-[72vh] items-center gap-12 py-8 lg:grid-cols-[1.2fr_.8fr] lg:py-0">
+            <div class="max-w-3xl">
+              <p class="mb-6 text-[10px] font-bold uppercase tracking-[.26em] text-acid">Your private cadence</p>
+              <h1 class="max-w-2xl font-display text-6xl leading-[.86] tracking-[-.085em] sm:text-7xl lg:text-8xl">
+                The right code.<br />
+                Right on time.
+              </h1>
+              <p class="mt-8 max-w-lg text-base leading-7 text-paper/60">
+                A focused home for the short-lived codes you actually need. Signed in with Google. Stored encrypted.
+              </p>
               <LoginButton client:load />
+            </div>
+            <div class="relative overflow-hidden rounded-[2rem] border border-line bg-paper/[.035] p-7 sm:p-9">
+              <div class="absolute -right-14 -top-14 size-48 rounded-full bg-acid/15 blur-3xl"></div>
+              <p class="relative text-[10px] font-bold uppercase tracking-[.22em] text-acid">The interval</p>
+              <div class="relative mt-12 flex items-end justify-between">
+                <span class="font-display text-7xl tracking-[-.09em]">30</span>
+                <span class="mb-2 text-xs font-bold uppercase tracking-[.18em] text-paper/50">seconds</span>
+              </div>
+              <div class="relative mt-5 h-1 overflow-hidden rounded-full bg-paper/10">
+                <span class="block h-full w-2/3 rounded-full bg-acid"></span>
+              </div>
+              <p class="relative mt-8 max-w-xs text-sm leading-6 text-paper/55">Open a code, copy it, move on. Nothing else competes for attention.</p>
             </div>
           </section>
         )
