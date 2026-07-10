@@ -281,84 +281,48 @@ export async function getItems(sub: string, env: Env): Promise<TotpItem[]> {
     .sort((left, right) => left.label.localeCompare(right.label));
 }
 
-async function response(body: unknown, status = 200, headers: HeadersInit = {}): Promise<Response> {
-  const responseHeaders = new Headers(headers);
-  responseHeaders.set("cache-control", "no-store");
-  responseHeaders.set("content-type", "application/json");
+export async function createItem(
+  sub: string,
+  input: Partial<TotpItem>,
+  env: Env,
+): Promise<TotpItem> {
+  const item = normalize(input);
+  if (!validItem(item)) throw new Error("Invalid token");
 
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: responseHeaders,
-  });
+  await putItem(sub, item, env);
+
+  return item;
 }
 
-export async function api(request: Request, env: Env, path: string): Promise<Response> {
-  if (path === "session" && request.method === "POST") {
-    try {
-      const { idToken } = (await request.json()) as { idToken: string };
-      const identity = await verifyShooToken(idToken);
-      const session = await createSession(
-        String(identity.pairwise_sub),
-        String(identity.name || ""),
-        env,
-      );
+export async function updateItem(
+  sub: string,
+  id: string,
+  input: Partial<TotpItem>,
+  env: Env,
+): Promise<TotpItem> {
+  const records = await listStoredItems(sub, env);
+  const current = records.find(({ item }) => item.id === id);
+  if (!current) throw new Error("Token not found");
 
-      return response({ ok: true }, 200, {
-        "set-cookie": `totp_session=${session}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=86400`,
-      });
-    } catch {
-      return response({ error: "Sign-in could not be verified" }, 401);
-    }
-  }
+  const item = normalize({ ...current.item, ...input, id });
+  if (!validItem(item)) throw new Error("Invalid token");
 
-  if (path === "logout" && request.method === "POST") {
-    return response({ ok: true }, 200, {
-      "set-cookie": "totp_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax",
-    });
-  }
+  await putItem(sub, item, env);
+  if (current.key !== tokenKey(sub, item)) await env.TOTP_KV.delete(current.key);
 
-  const user = await getUser(request, env);
-  if (!user) return response({ error: "Authentication required" }, 401);
+  return item;
+}
 
-  if (path === "items" && request.method === "GET") {
-    return response({ items: await getItems(user.sub, env), name: user.name });
-  }
+export async function deleteItem(sub: string, id: string, env: Env): Promise<void> {
+  const records = await listStoredItems(sub, env);
+  const current = records.find(({ item }) => item.id === id);
+  if (!current) throw new Error("Token not found");
 
-  if (path === "items" && request.method === "POST") {
-    const item = normalize((await request.json()) as Partial<TotpItem>);
-    if (!validItem(item)) return response({ error: "Invalid token" }, 400);
+  await env.TOTP_KV.delete(current.key);
+}
 
-    await putItem(user.sub, item, env);
+export async function createShooSession(idToken: string, env: Env): Promise<string> {
+  const identity = await verifyShooToken(idToken);
 
-    return response({ item }, 201);
-  }
-
-  if (path.startsWith("items/")) {
-    const id = path.slice(6);
-    const records = await listStoredItems(user.sub, env);
-    const current = records.find(({ item }) => item.id === id);
-    if (!current) return response({ error: "Token not found" }, 404);
-
-    if (request.method === "PATCH") {
-      const item = normalize({
-        ...current.item,
-        ...((await request.json()) as Partial<TotpItem>),
-        id,
-      });
-      if (!validItem(item)) return response({ error: "Invalid token" }, 400);
-
-      await putItem(user.sub, item, env);
-      if (current.key !== tokenKey(user.sub, item)) await env.TOTP_KV.delete(current.key);
-
-      return response({ item });
-    }
-
-    if (request.method === "DELETE") {
-      await env.TOTP_KV.delete(current.key);
-
-      return response({ ok: true });
-    }
-  }
-
-  return response({ error: "Not found" }, 404);
+  return createSession(String(identity.pairwise_sub), String(identity.name || ""), env);
 }
