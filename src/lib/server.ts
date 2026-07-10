@@ -99,24 +99,22 @@ async function unseal<T>(value: string, env: Env): Promise<T> {
   }
 }
 
-async function createSession(sub: string, name: string, env: Env): Promise<string> {
-  const payload = encodeBase64(
-    encoder.encode(
-      JSON.stringify({
-        sub,
-        name: name || "Signed-in user",
-        exp: Date.now() + 86_400_000,
-      }),
-    ),
-  );
-  const signature = new Uint8Array(
-    await crypto.subtle.sign("HMAC", await cryptoKey(env, "hmac"), encoder.encode(payload)),
-  );
-
-  return `${payload}.${encodeBase64(signature)}`;
-}
-
 export async function getUser(request: Request, env: Env): Promise<SessionUser | null> {
+  const shooToken = readCookie(request, "shoo_identity");
+  if (shooToken) {
+    try {
+      const identity = await verifyShooToken(decodeURIComponent(shooToken));
+
+      return {
+        exp: Number(identity.exp) * 1_000,
+        name: String(identity.name || "Signed-in user"),
+        sub: String(identity.pairwise_sub),
+      };
+    } catch {
+      return null;
+    }
+  }
+
   try {
     const [payload, signature] = readCookie(request, "totp_session")!.split(".");
     const valid = await crypto.subtle.verify(
@@ -319,10 +317,4 @@ export async function deleteItem(sub: string, id: string, env: Env): Promise<voi
   if (!current) throw new Error("Token not found");
 
   await env.TOTP_KV.delete(current.key);
-}
-
-export async function createShooSession(idToken: string, env: Env): Promise<string> {
-  const identity = await verifyShooToken(idToken);
-
-  return createSession(String(identity.pairwise_sub), String(identity.name || ""), env);
 }
