@@ -1,11 +1,12 @@
-@import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Geist:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 @theme {
   --color-ink: #131312;
   --color-paper: #fff6e9;
   --color-acid: #ff8a4c;
   --color-line: #393733;
-  --font-display: "Inter", "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Geist", "Helvetica Neue", Arial, sans-serif;
+  --font-ui: "Inter", "Helvetica Neue", Arial, sans-serif;
   --font-mono: "DM Mono", "SFMono-Regular", "Cascadia Mono", monospace;
 }
 @layer base {
@@ -17,7 +18,7 @@
     background:
       radial-gradient(circle at 84% -8%, rgb(255 138 76 / 12%), transparent 25rem), var(--color-ink);
     color: var(--color-paper);
-    font-family: var(--font-mono);
+    font-family: var(--font-ui);
   }
   html[data-session-sync="true"] body > * {
     visibility: hidden;
