@@ -27,7 +27,6 @@ async function requireUser(request: Request) {
 
 export const server = {
   signIn: defineAction({
-    accept: "form",
     input: z.object({ idToken: z.string().min(1) }),
     handler: async ({ idToken }, context) => {
       const session = await createShooSession(idToken, env as Env);
