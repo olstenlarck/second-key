@@ -91,25 +91,25 @@ function TokenCard({
   const midpoint = item.digits / 2;
 
   return (
-    <article className="group min-w-0 border border-line bg-[#10120f] p-5 hover:border-white/30">
+    <article className="group min-w-0 rounded-[1.45rem] border border-line bg-paper/[.035] p-5 transition hover:-translate-y-0.5 hover:border-paper/30 hover:bg-paper/[.055]">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-[10px] uppercase tracking-[.18em] text-white/35">
+          <p className="truncate text-[10px] font-bold uppercase tracking-[.16em] text-paper/75">
             {item.issuer || "TOTP"}
           </p>
-          <h2 className="mt-2 truncate font-bold">{item.label}</h2>
+          <h2 className="mt-2 truncate text-sm font-bold text-paper">{item.label}</h2>
         </div>
         <div className="flex gap-1">
           <button
-            className="grid size-9 place-items-center border border-line text-white/45 hover:border-acid hover:text-acid"
+            className="grid size-9 place-items-center rounded-full border border-line text-paper/60 transition hover:border-acid hover:text-acid"
             onClick={() => onEdit(item)}
             title="Edit"
             type="button"
           >
-            ✎
+            <span aria-hidden="true">✎</span>
           </button>
           <button
-            className="grid size-9 place-items-center border border-line text-white/35 hover:border-red-400 hover:text-red-300"
+            className="grid size-9 place-items-center rounded-full border border-line text-paper/45 transition hover:border-red-400 hover:text-red-300"
             onClick={() => onDelete(item)}
             title="Delete"
             type="button"
@@ -119,32 +119,32 @@ function TokenCard({
         </div>
       </div>
 
-      <button className="mt-8 block w-full text-left" onClick={copy} type="button">
-        <span className="font-display text-[clamp(1.8rem,4vw,2.7rem)] tracking-[.06em]">
+      <button className="mt-9 block w-full text-left" onClick={copy} type="button">
+        <span className="font-display text-[clamp(2rem,4vw,2.9rem)] tracking-[.035em] text-paper">
           {visible.slice(0, midpoint)}
-          <i className="px-1 not-italic text-white/15">·</i>
+          <i className="px-1 not-italic text-paper/25">·</i>
           {visible.slice(midpoint)}
         </span>
-        <span className="mt-4 block h-0.5 bg-white/10">
+        <span className="mt-5 block h-1 overflow-hidden rounded-full bg-paper/10">
           <i
-            className="block h-full bg-acid"
+            className="block h-full rounded-full bg-acid"
             style={{ width: `${(seconds / item.period) * 100}%` }}
           />
         </span>
       </button>
 
-      <div className="mt-3 flex justify-between text-[9px] uppercase tracking-widest text-white/25">
+      <div className="mt-4 flex justify-between text-[9px] font-bold uppercase tracking-widest text-paper/45">
         <span>
           {item.algorithm} · {item.digits} digits
         </span>
         <span>{seconds}s</span>
       </div>
       <button
-        className="mt-4 w-full border border-line py-2 text-[10px] uppercase tracking-widest text-white/50 hover:border-acid hover:text-acid"
+        className="mt-5 flex w-full items-center justify-center gap-2 rounded-full border border-line py-2.5 text-[10px] font-bold uppercase tracking-widest text-paper/65 transition hover:border-acid hover:bg-acid hover:text-ink"
         onClick={copy}
         type="button"
       >
-        Copy code ⧉
+        Copy code <span aria-hidden="true">⧉</span>
       </button>
     </article>
   );
@@ -196,21 +196,25 @@ export function Vault({ initialItems }: { initialItems: TotpItem[] }) {
 
   return (
     <>
-      <div className="mb-8 flex flex-wrap items-end justify-between gap-5">
+      <div className="mb-10 flex flex-wrap items-end justify-between gap-5">
         <div>
-          <p className="text-[10px] uppercase tracking-[.22em] text-acid">Authenticator vault</p>
-          <h1 className="mt-2 font-display text-5xl tracking-[-.06em]">Your codes</h1>
+          <p className="text-[10px] font-bold uppercase tracking-[.24em] text-acid">
+            Your interval
+          </p>
+          <h1 className="mt-3 font-display text-5xl tracking-[-.075em] sm:text-6xl">
+            Ready when you are.
+          </h1>
         </div>
         <div className="flex gap-2">
           <button
-            className="border border-line px-4 py-3 text-xs hover:border-acid"
+            className="rounded-full border border-line px-5 py-3 text-xs font-bold text-paper/70 transition hover:border-acid hover:text-acid"
             onClick={() => setHidden((current) => !current)}
             type="button"
           >
             {hidden ? "Show codes" : "Hide codes"}
           </button>
           <button
-            className="bg-acid px-5 py-3 font-bold text-ink"
+            className="rounded-full bg-acid px-5 py-3 text-sm font-bold text-ink transition hover:-translate-y-0.5"
             onClick={() => open()}
             type="button"
           >
@@ -219,10 +223,10 @@ export function Vault({ initialItems }: { initialItems: TotpItem[] }) {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {items.length === 0 && (
-          <div className="col-span-full border border-line py-24 text-center text-sm text-white/35">
-            No codes yet.
+          <div className="col-span-full rounded-[1.5rem] border border-dashed border-line py-24 text-center text-sm text-paper/50">
+            Your next code lives here.
           </div>
         )}
         {items.map((item) => (
@@ -238,24 +242,33 @@ export function Vault({ initialItems }: { initialItems: TotpItem[] }) {
       </div>
 
       <dialog
-        className="w-[min(560px,calc(100%-24px))] border border-line bg-[#11130f] p-0 text-paper backdrop:bg-black/80"
+        className="fixed inset-0 m-auto w-[min(600px,calc(100%-24px))] max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-[1.75rem] border border-line bg-[#1a1917] p-0 text-paper shadow-2xl backdrop:bg-black/75"
         ref={dialog}
       >
-        <form className="grid gap-4 p-6" onSubmit={submit}>
-          <div className="flex items-center justify-between border-b border-line pb-4">
-            <b>{editing ? "Edit authenticator" : "Add authenticator"}</b>
-            <button className="text-white/50" onClick={() => dialog.current?.close()} type="button">
+        <form className="grid gap-5 p-6 sm:p-8" onSubmit={submit}>
+          <div className="flex items-center justify-between border-b border-line pb-5">
+            <div>
+              <p className="text-[9px] font-bold uppercase tracking-[.2em] text-acid">
+                Interval token
+              </p>
+              <b className="mt-2 block text-xl">{editing ? "Edit code" : "Add a code"}</b>
+            </div>
+            <button
+              className="grid size-9 place-items-center rounded-full border border-line text-paper/60"
+              onClick={() => dialog.current?.close()}
+              type="button"
+            >
               ×
             </button>
           </div>
           {(["label", "issuer", "secret"] as const).map((field) => (
             <label
-              className="grid gap-2 text-[10px] uppercase tracking-widest text-white/45"
+              className="grid gap-2 text-[10px] font-bold uppercase tracking-widest text-paper/70"
               key={field}
             >
               {field}
               <input
-                className="border border-line bg-ink p-3 text-sm normal-case text-paper"
+                className="rounded-xl border border-line bg-black/20 p-3 text-sm normal-case text-paper"
                 onChange={(event) => setDraft({ ...draft, [field]: event.target.value })}
                 required={field !== "issuer"}
                 value={draft[field]}
@@ -264,7 +277,7 @@ export function Vault({ initialItems }: { initialItems: TotpItem[] }) {
           ))}
           <div className="grid grid-cols-3 gap-3">
             <select
-              className="border border-line bg-ink p-3"
+              className="rounded-xl border border-line bg-black/20 p-3"
               onChange={(event) =>
                 setDraft({ ...draft, algorithm: event.target.value as Draft["algorithm"] })
               }
@@ -275,7 +288,7 @@ export function Vault({ initialItems }: { initialItems: TotpItem[] }) {
               <option>SHA512</option>
             </select>
             <select
-              className="border border-line bg-ink p-3"
+              className="rounded-xl border border-line bg-black/20 p-3"
               onChange={(event) =>
                 setDraft({ ...draft, digits: Number(event.target.value) as Draft["digits"] })
               }
@@ -285,7 +298,7 @@ export function Vault({ initialItems }: { initialItems: TotpItem[] }) {
               <option>8</option>
             </select>
             <select
-              className="border border-line bg-ink p-3"
+              className="rounded-xl border border-line bg-black/20 p-3"
               onChange={(event) =>
                 setDraft({ ...draft, period: Number(event.target.value) as Draft["period"] })
               }
@@ -296,12 +309,14 @@ export function Vault({ initialItems }: { initialItems: TotpItem[] }) {
             </select>
           </div>
           <p className="min-h-4 text-xs text-red-300">{error}</p>
-          <button className="bg-acid p-4 font-bold text-ink">Encrypt & save</button>
+          <button className="rounded-full bg-acid p-4 font-bold text-ink transition hover:-translate-y-0.5">
+            Save code
+          </button>
         </form>
       </dialog>
 
       <div
-        className={`pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 bg-acid px-4 py-3 text-xs font-bold text-ink transition ${toast ? "opacity-100" : "translate-y-3 opacity-0"}`}
+        className={`pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-full bg-acid px-5 py-3 text-xs font-bold text-ink shadow-xl transition ${toast ? "opacity-100" : "translate-y-3 opacity-0"}`}
       >
         CODE COPIED
       </div>
